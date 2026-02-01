@@ -119,7 +119,7 @@ while True:
         fig.add_trace(go.Scatter(x=df['time'], y=df['actual_load'], mode='lines', name='Actual', fill='tozeroy', line=dict(color='#00a8ff')))
         fig.add_trace(go.Scatter(x=df['time'], y=df['predicted_load'], mode='lines', name='Predicted', line=dict(color='#ff4757', dash='dash')))
         fig.update_layout(title="Real-Time Traffic vs. Prediction", height=400, margin=dict(l=0, r=0, t=30, b=0))
-        
-        chart_placeholder.plotly_chart(fig, use_container_width=True)
+        chart_placeholder.plotly_chart(fig, use_container_width=True, key=f"live_chart_{time.time()}")
+
 
     time.sleep(1)

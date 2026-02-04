@@ -15,7 +15,7 @@ HISTORY_WINDOW = 120
 
 class SmartScaleSimulator:
     def __init__(self):
-        print("🚀 Starting SmartScale Simulation Server...")
+        print("Starting SmartScale Simulation Server...")
         self.brain = SmartScaleSystem()
         
         # Load the Data
@@ -23,7 +23,7 @@ class SmartScaleSimulator:
             raw_df = pd.read_csv(DATA_FILE)
             
             # --- RESAMPLE TO CONTINUOUS 1-MINUTE INTERVALS ---
-            print(f"   📊 Processing Data: Filling time gaps in Google Trace...")
+            print(f"    Processing Data: Filling time gaps in Google Trace...")
             
             # 1. Set 'minute' as the index
             raw_df = raw_df.sort_values('minute').set_index('minute')
@@ -41,19 +41,21 @@ class SmartScaleSimulator:
             # 5. LIMIT TO 2000 MINUTES (Now these are 2000 *continuous* minutes)
             self.df = self.df.head(2000)
             
-            print(f"   📂 Ready: {len(self.df)} continuous minutes loaded for simulation.")
+            print(f"    Ready: {len(self.df)} continuous minutes loaded for simulation.")
         else:
-            print(f"   ❌ Error: Traffic file not found at {DATA_FILE}")
+            print(f"    Error: Traffic file not found at {DATA_FILE}")
             exit()
             
         # Initialize Log File
         self.log_file = LOG_FILE
         with open(self.log_file, "w") as f:
             f.write("time,actual_load,predicted_load,replicas,decision\n")
-        print(f"   📝 Logging to: {self.log_file}")
+        print(f"    Logging to: {self.log_file}")
 
+
+    #iterate through each minute in the data and simulate the scaling decisions in simulation_server.py file
     def run(self):
-        print("\n🔴 SIMULATION LIVE: Streaming Continuous Data...")
+        print("\n SIMULATION LIVE: Streaming Continuous Data...")
         print(f"{'TIME':<10} | {'ACTUAL':<10} | {'PREDICTED':<10} | {'REPLICAS':<10} | {'DECISION'}")
         print("-" * 65)
         
@@ -97,7 +99,7 @@ class SmartScaleSimulator:
 
             time.sleep(SIMULATION_SPEED)
             
-        print("\n✅ Simulation Completed (2000 Minutes Reached).")
+        print("\n Simulation Completed (2000 Minutes Reached).")
 
 if __name__ == "__main__":
     sim = SmartScaleSimulator()

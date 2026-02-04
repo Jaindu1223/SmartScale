@@ -38,7 +38,7 @@ class SimpleLSTM(nn.Module):
 # --- 2. THE SYSTEM BRAIN ---
 class SmartScaleSystem:
     def __init__(self):
-        print("🧠 Initializing SmartScale Backend...")
+        print("Initializing SmartScale Backend...")
         
         # Path setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +47,7 @@ class SmartScaleSystem:
         
         self.load_profiler()
         self.load_optimizer()
-        print("✅ System Core Ready.")
+        print("System Core Ready.")
 
     def load_profiler(self):
         try:
@@ -63,16 +63,16 @@ class SmartScaleSystem:
                 self.prof_scaler_y = joblib.load(path_sy)
                 print("   🔹 Module 1: Architecture Profiler - ACTIVE")
             else:
-                print(f"   ⚠️ Warning: {path_model} not found.")
+                print(f"    Warning: {path_model} not found.")
         except Exception as e:
-            print(f"   ❌ Failed to load Profiler: {e}")
+            print(f"    Failed to load Profiler: {e}")
 
     def load_optimizer(self):
         """Loads the NEW LSTM model and BOTH scalers"""
         try:
             path_model = os.path.join(self.models_dir, 'resource_optimizer.pth')
             path_scaler = os.path.join(self.models_dir, 'traffic_scaler.pkl')
-            path_time_scaler = os.path.join(self.models_dir, 'time_scaler.pkl') # NEW
+            path_time_scaler = os.path.join(self.models_dir, 'time_scaler.pkl')
 
             if os.path.exists(path_model):
                 # Initialize with input_dim=3
@@ -81,12 +81,12 @@ class SmartScaleSystem:
                 self.optimizer_model.eval()
                 
                 self.traffic_scaler = joblib.load(path_scaler)
-                self.time_scaler = joblib.load(path_time_scaler) # NEW
-                print("   🔹 Module 2: Resource Optimizer (Time-Aware LSTM) - ACTIVE")
+                self.time_scaler = joblib.load(path_time_scaler) 
+                print("    Module 2: Resource Optimizer (Time-Aware LSTM) - ACTIVE")
             else:
-                print(f"   ⚠️ Warning: {path_model} not found.")
+                print(f"    Warning: {path_model} not found.")
         except Exception as e:
-            print(f"   ❌ Failed to load Optimizer: {e}")
+            print(f"    Failed to load Optimizer: {e}")
 
     # --- API FUNCTIONS ---
     def profile_model(self, params, flops, layers, hidden_dim):

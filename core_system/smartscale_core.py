@@ -100,61 +100,43 @@ class SmartScaleSystem:
         return max(128, round(predicted_mb, 2))
 
     def predict_next_load(self, history_list, current_minute_index):
-        """
-        Step 2: Predict Traffic using CPU + Time features.
-        We need 'current_minute_index' to calculate Hour/Min features.
-        """
-        if not hasattr(self, 'optimizer_model'): return 0.0
+        """Used by the Simulator with minute indexes."""
+        return self._execute_prediction(history_list, current_minute_index)
 
-        # 1. RESAMPLING LOGIC
-        # The model was trained on 5-minute intervals with a lookback of 12 steps (60 mins total).
-        # We need the last 60 minutes of history.
+    def predict_live_load(self, history_list, current_time_dt):
+        """Used by the Live AWS Dashboard with real datetime objects."""
+        # Convert datetime to a pseudo-index for the logic
+        minute_index = current_time_dt.hour * 60 + current_time_dt.minute
+        return self._execute_prediction(history_list, minute_index)
+
+    def _execute_prediction(self, history_list, minute_index):
+        """Internal helper to process the 12-step (60 min) sequence."""
+        if not hasattr(self, 'optimizer_model'): return 0.0
+        
+        # Prepare 12 steps (one every 5 mins)
         if len(history_list) < 60:
             padding = [history_list[-1]] * (60 - len(history_list)) if history_list else [0]*60
             history_list = padding + history_list
         
-        # Take the last 60 minutes
-        last_60_mins = history_list[-60:]
-        
-        # Extract every 5th element to match the training "5-min bin" logic
-        # This gives us exactly 12 data points
-        resampled_history = last_60_mins[::5] 
-        
-        # 2. FEATURE ENGINEERING
-        # We need to generate the [Hour, Min] for these 12 points
-        # The last point is 'current_minute_index'. The one before is 'current - 5', etc.
+        resampled_history = history_list[-60:][::5] 
         time_features = []
         traffic_features = []
         
         for i, cpu_val in enumerate(resampled_history):
-            # Calculate the minute timestamp for this specific step
-            # i goes 0..11. The time offset is (11-i)*5 minutes ago
-            step_time = current_minute_index - ((11-i) * 5)
-            
+            step_time = minute_index - ((11-i) * 5)
             hour = (step_time // 60) % 24
             min_of_hour = step_time % 60
-            
             time_features.append([hour, min_of_hour])
             traffic_features.append([cpu_val])
 
-        # 3. SCALING
-        # Scale CPU Log
-        traffic_log = np.log1p(np.array(traffic_features))
-        traffic_scaled = self.traffic_scaler.transform(traffic_log)
-        
-        # Scale Time
+        # Scaling & Prediction
+        traffic_scaled = self.traffic_scaler.transform(np.log1p(np.array(traffic_features)))
         time_scaled = self.time_scaler.transform(np.array(time_features))
-        
-        # Combine [CPU, Hour, Min] -> Shape (12, 3)
         combined_data = np.hstack([traffic_scaled, time_scaled])
         
-        # 4. PREDICT
         input_tensor = torch.tensor(combined_data, dtype=torch.float32).unsqueeze(0).to(DEVICE)
-        
         with torch.no_grad():
             pred_scaled = self.optimizer_model(input_tensor).cpu().numpy()
             
-        # Inverse Transform
         pred_real = np.expm1(self.traffic_scaler.inverse_transform(pred_scaled)[0][0])
-        
         return max(0.0, float(pred_real))

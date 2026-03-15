@@ -83,11 +83,11 @@ class SmartScaleSimulator:
             
             decision = "MAINTAIN"
             if predicted_load > actual_load * 1.2: 
-                decision = "SCALE UP 🔼"
+                decision = "SCALE UP"
             elif actual_load > predicted_load * 2.0:
-                decision = "REACTIVE UP ⚠️"
+                decision = "REACTIVE UP"
             elif effective_load < actual_load * 0.8: 
-                decision = "SCALE DOWN 🔽"
+                decision = "SCALE DOWN"
 
             # 4. Log to Terminal
             if index % 10 == 0:

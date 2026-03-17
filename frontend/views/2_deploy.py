@@ -31,15 +31,16 @@ def update_lambda_memory(access_key, secret_key, region, function_name, memory_m
         return True, valid_memory
     except Exception as e: return False, str(e)
 
-def upload_model_to_s3(access_key, secret_key, region, file_path, bucket_name="smartscale-models"):
+def upload_model_to_s3(access_key, secret_key, region, file_path, original_file_name, bucket_name="smartscale-models"):
     """Uploads the physical .pth file to AWS S3 so the Lambda replicas can download it."""
     try:
         s3_client = boto3.client('s3', aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
-        object_name = "models/customer_model.pth" # This is where Lambda will look for it
+        object_name = f"models/{original_file_name}" 
         s3_client.upload_file(file_path, bucket_name, object_name)
-        return True
+        return True, object_name
     except Exception as e:
-        return False
+        print(f"S3 Upload Error: {e}")
+        return False, str(e)
 
 # --- UI SETUP ---
 st.title("🚀 Deploy Customer Workload")
@@ -54,16 +55,26 @@ customer_upload = st.file_uploader("Upload ML Model (.pth)", type=['pth'])
 
 if st.button("⚙️ Profile & Deploy to AWS", type="primary"):
     if customer_upload:
-        with st.spinner("Extracting Architecture and Uploading to Cloud..."):
+        # Get the actual file name (e.g., 'fraud_detection_v2.pth')
+        original_name = customer_upload.name 
+        
+        with st.spinner(f"Extracting Architecture for {original_name} and Uploading to Cloud..."):
             temp_path = os.path.join(project_root, "temp_model.pth")
             with open(temp_path, "wb") as f: f.write(customer_upload.getbuffer())
             
             try:
-                # 1. Extract & Profile
-                params, flops, layers, dim = extract_features_from_pth(temp_path)
-                st.write(f"📊 **Extracted:** {params:.2f}M Params, {layers} Layers")
-                predicted_ram = brain.profile_model(params, flops, layers, dim)
-                st.write(f"🧠 **AI Profiler:** Requires ~{predicted_ram} MB RAM")
+                # 1. Extract 5 Features from the uploaded file
+                layers, input_dim, hidden_dim, params, flops = extract_features_from_pth(temp_path)
+                
+                st.markdown("### 📊 Extracted Model Architecture")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Layers", layers)
+                c2.metric("Parameters", f"{params / 1_000_000:.2f} M")
+                c3.metric("Est. FLOPs", f"{flops / 1_000_000_000:.2f} G")
+                
+                # 2. Ask the AI Profiler for the RAM
+                predicted_ram = brain.profile_model(layers, input_dim, hidden_dim, params, flops)
+                st.success(f"🧠 **AI Profiler Decision:** Sizing Lambda to **{predicted_ram} MB RAM**")
                 
                 # Retrieve Session Keys
                 ak = st.session_state['aws_access']
@@ -71,22 +82,24 @@ if st.button("⚙️ Profile & Deploy to AWS", type="primary"):
                 reg = st.session_state['aws_region']
                 func = st.session_state['aws_func']
 
-                # 2. Push Hardware Config to AWS Lambda
+                # 3. Push Hardware Config to AWS Lambda
                 st.text("☁️ Updating Lambda Infrastructure...")
                 success_mem, result_mem = update_lambda_memory(ak, sk, reg, func, predicted_ram)
                 
-                # 3. Push Physical Model to AWS S3
-                st.text("📦 Uploading model artifact to S3...")
-                success_s3 = upload_model_to_s3(ak, sk, reg, temp_path)
+                # 4. Push Physical Model to AWS S3
+                st.text(f"📦 Uploading {original_name} to S3...")
+                # UPDATED: Pass the original_name to the function
+                success_s3, s3_path = upload_model_to_s3(ak, sk, reg, temp_path, original_name)
                 
-                # 4. Final Verification
-                if success_mem and success_s3: 
-                    st.success(f"✅ Deployment Complete! Lambda sized to {result_mem} MB and model secured in S3.")
+                # 5. Final Verification
+                if success_mem and success_s3:
+                    st.success(f"✅ Deployment Complete! AWS Lambda allocated {result_mem} MB and model secured at `s3://smartscale-models/{s3_path}`.")
                 elif success_mem and not success_s3:
-                    st.warning(f"⚠️ Lambda sized to {result_mem} MB, but S3 Upload Failed. Check your S3 permissions.")
+                    st.warning(f"⚠️ Lambda sized to {result_mem} MB, but S3 Upload Failed. Error: {s3_path}")
                 else: 
                     st.error(f"❌ AWS Error: {result_mem}")
                     
-            except Exception as e: st.error(f"Error: {e}")
+            except Exception as e: 
+                st.error(f"Error during deployment: {e}")
             finally:
                 if os.path.exists(temp_path): os.remove(temp_path)

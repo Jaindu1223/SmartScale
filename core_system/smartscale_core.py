@@ -9,13 +9,30 @@ import pandas as pd
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 # --- 1. MODEL ARCHITECTURES ---
+# class ProfilerNN(nn.Module):
+#     def __init__(self):
+#         super(ProfilerNN, self).__init__()
+#         self.net = nn.Sequential(
+#             nn.Linear(4, 64),
+#             nn.ReLU(),
+#             nn.Dropout(0.2),
+#             nn.Linear(64, 32),
+#             nn.ReLU(),
+#             nn.Linear(32, 1)
+#         )
+#     def forward(self, x): return self.net(x)
+
 class ProfilerNN(nn.Module):
     def __init__(self):
         super(ProfilerNN, self).__init__()
+        # UPDATED: Matches your new 5-input, deep architecture
         self.net = nn.Sequential(
-            nn.Linear(4, 64),
+            nn.Linear(5, 128),      
+            nn.BatchNorm1d(128),    
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.1),
+            nn.Linear(128, 64),
+            nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
             nn.Linear(32, 1)
@@ -52,16 +69,19 @@ class SmartScaleSystem:
     def load_profiler(self):
         try:
             self.profiler_model = ProfilerNN().to(DEVICE)
-            path_model = os.path.join(self.models_dir, 'profiler_nn_model.pth')
-            path_sx = os.path.join(self.models_dir, 'profiler_scaler_x.pkl')
-            path_sy = os.path.join(self.models_dir, 'profiler_scaler_y.pkl')
+            path_model = os.path.join(self.models_dir, '1_architecture_profiler_model.pth')
+            path_sx = os.path.join(self.models_dir, '1_architecture_profiler_scaler_x.pkl')
+            path_sy = os.path.join(self.models_dir, '1_architecture_profiler_scaler_y.pkl')
+            # path_model = os.path.join(self.models_dir, 'profiler_nn_model.pth')
+            # path_sx = os.path.join(self.models_dir, 'profiler_scaler_x.pkl')
+            # path_sy = os.path.join(self.models_dir, 'profiler_scaler_y.pkl')
 
             if os.path.exists(path_model):
                 self.profiler_model.load_state_dict(torch.load(path_model, map_location=DEVICE))
                 self.profiler_model.eval()
                 self.prof_scaler_x = joblib.load(path_sx)
                 self.prof_scaler_y = joblib.load(path_sy)
-                print("   🔹 Module 1: Architecture Profiler - ACTIVE")
+                print("   Module 1: Architecture Profiler - ACTIVE")
             else:
                 print(f"    Warning: {path_model} not found.")
         except Exception as e:
@@ -82,23 +102,30 @@ class SmartScaleSystem:
                 
                 self.traffic_scaler = joblib.load(path_scaler)
                 self.time_scaler = joblib.load(path_time_scaler) 
-                print("    Module 2: Resource Optimizer (Time-Aware LSTM) - ACTIVE")
+                print("   Module 2: Resource Optimizer (Time-Aware LSTM) - ACTIVE")
             else:
                 print(f"    Warning: {path_model} not found.")
         except Exception as e:
             print(f"    Failed to load Optimizer: {e}")
 
     # --- API FUNCTIONS ---
-    def profile_model(self, params, flops, layers, hidden_dim):
+    def profile_model(self, layers, input_dim, hidden_dim, params, flops):
         if not hasattr(self, 'profiler_model'): return 512
-        input_data = np.array([[params, flops, layers, hidden_dim]])
+        
+        # Creating the array in the exact order: ['Layers', 'Input_Dim', 'Hidden_Dim', 'Params', 'FLOPs']
+        input_data = np.array([[layers, input_dim, hidden_dim, params, flops]])
+        
         input_scaled = self.prof_scaler_x.transform(input_data)
         input_tensor = torch.FloatTensor(input_scaled).to(DEVICE)
+        
+        # Set to eval mode before predicting
+        self.profiler_model.eval()
         with torch.no_grad():
             prediction_scaled = self.profiler_model(input_tensor).cpu().numpy()
+            
         predicted_mb = self.prof_scaler_y.inverse_transform(prediction_scaled)[0][0]
-        return max(128, round(predicted_mb, 2))
-
+        return max(128, round(predicted_mb, 2)) # Ensures AWS Lambda minimum of 128MB
+    
     def predict_next_load(self, history_list, current_minute_index):
         """Used by the Simulator with minute indexes."""
         return self._execute_prediction(history_list, current_minute_index)

@@ -29,7 +29,7 @@ class RandomModel(nn.Module):
         return self.model(x)
 
 data = []
-print(f"🚀 Starting Generation with NOISE (Realistic Data)...")
+print(f" Starting Generation with NOISE (Realistic Data)...")
 
 for i in range(DATASET_SIZE):
     n_layers = np.random.randint(1, 25)
@@ -43,13 +43,11 @@ for i in range(DATASET_SIZE):
         
         params = stats.total_params
         
-        # --- FIXING THE FLOPs BUG ---
         # FLOPs shouldn't equal params perfectly. It depends on sequence lengths/batch sizes.
         # We simulate a dynamic batch size/sequence length multiplier (e.g. 1 to 10)
         flops_multiplier = np.random.uniform(1.0, 10.0)
         flops = int(params * flops_multiplier)
         
-        # --- FIXING RAM CALCULATION ---
         # Base calculation (Params * 4 bytes for FP32)
         base_mem = (params * 4) / (1024 * 1024)
         
@@ -71,7 +69,7 @@ for i in range(DATASET_SIZE):
         data.append([n_layers, in_dim, hid_dim, params, flops, latency_ms, memory_mb])
 
         if (i+1) % 500 == 0:
-            print(f"✅ Generated {i+1}/{DATASET_SIZE} models...")
+            print(f" Generated {i+1}/{DATASET_SIZE} models...")
             
     except Exception as e:
         print(f"Error at {i}: {e}")
@@ -80,4 +78,4 @@ for i in range(DATASET_SIZE):
 columns = ['Layers', 'Input_Dim', 'Hidden_Dim', 'Params', 'FLOPs', 'Latency_ms', 'RAM_MB']
 df = pd.DataFrame(data, columns=columns)
 df.to_csv("profiler_10k_fixed.csv", index=False)
-print("🎉 Final Dataset Saved as profiler_10k_fixed.csv")
+print(" Final Dataset Saved as profiler_10k_fixed.csv")

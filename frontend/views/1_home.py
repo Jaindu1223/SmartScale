@@ -109,9 +109,26 @@ if len(ts) > 0:
             elif replicas < last_rep: decision = "SCALE DOWN 🔽"
             else: decision = "MAINTAIN ✅"
             
+            # --- THE COOLDOWN LOGIC ---
+            current_time = time.time()
+            cooldown_seconds = 180 # Wait 3 minutes before hitting the AWS API again
+            
+            if 'last_scale_time' not in st.session_state:
+                st.session_state['last_scale_time'] = 0.0
+
             if live_mode and replicas != last_rep:
-                success = scale_aws_resource(replicas, ak, sk, reg, func_name)
-                if success: st.session_state['last_scaled_replica'] = replicas
+                time_since_last_scale = current_time - st.session_state['last_scale_time']
+                
+                if time_since_last_scale > cooldown_seconds:
+                    # Cooldown is over, safe to scale!
+                    success = scale_aws_resource(replicas, ak, sk, reg, func_name)
+                    if success: 
+                        st.session_state['last_scaled_replica'] = replicas
+                        st.session_state['last_scale_time'] = current_time # Reset timer
+                else:
+                    # Still in cooldown! Protect AWS from thrashing.
+                    decision = "COOLDOWN ⏳"
+                    replicas = last_rep # Hold the line
                     
             new_row = pd.DataFrame([{
                 "Time": latest_time_str, 
@@ -121,7 +138,6 @@ if len(ts) > 0:
                 "AI Decision": decision
             }])
             st.session_state.live_logs = pd.concat([st.session_state.live_logs, new_row], ignore_index=True)
-
 # --- RENDERING THE UI ---
 df = st.session_state.live_logs
 if df.empty:

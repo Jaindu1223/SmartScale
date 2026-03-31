@@ -58,23 +58,30 @@ def inject_demo_traffic(access_key, secret_key, region, function_name):
     """Runs silently in the background. Sends async requests for 60 seconds to trigger scaling."""
     try:
         client = boto3.client('lambda', aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
-        # Run for exactly 60 seconds, sending ~5 safe async requests per second (protects your AWS quota)
         for _ in range(60):
             for _ in range(5):
-                # InvocationType='Event' means AWS receives it instantly, but Streamlit doesn't wait for a reply
                 client.invoke(FunctionName=function_name, Qualifier='PROD', InvocationType='Event') 
             time.sleep(1)
     except Exception as e:
         print(f"Traffic Injection Failed: {e}")
 
 # --- UI SETUP ---
-st.set_page_config(page_title="Deploy Model", page_icon="🚀", layout="wide")
-st.title("🚀 Deploy Customer Workload")
-st.markdown("Upload your PyTorch model. SmartScale will automatically extract the layers, size the hardware, and push the artifact to AWS S3.")
+st.markdown("<h1 style='text-align: left; font-weight: 800; letter-spacing: -0.5px;'>Deploy Customer Workload</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: left; color: #b3e5fc; margin-bottom: 30px; font-size: 1.1em;'>Upload your PyTorch model. SmartScale will automatically extract the layers, size the hardware, and push the artifact to AWS S3.</p>", unsafe_allow_html=True)
 
-# Check if keys are set
+
 if 'aws_access' not in st.session_state or not st.session_state['aws_access']:
-    st.warning("⚠️ Please go to the **Cloud Settings** page to enter your AWS credentials first.")
+    warning_html = """
+    <div style="
+        background: rgba(255, 171, 0, 0.1); border: 1px solid rgba(255, 171, 0, 0.4); 
+        border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; 
+        backdrop-filter: blur(10px); color: #ffca28; display: flex; align-items: center; 
+        font-weight: 500; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+        <span style="font-size: 24px; margin-right: 15px;">⚠️</span>
+        <span style="font-size: 16px;"><b>Authentication Required:</b> Please configure your secure AWS keys in the <b>Cloud Settings</b> page.</span>
+    </div>
+    """
+    st.markdown(warning_html, unsafe_allow_html=True)
     st.stop()
 
 ak = st.session_state['aws_access']
@@ -82,87 +89,108 @@ sk = st.session_state['aws_secret']
 reg = st.session_state['aws_region']
 func = st.session_state.get('aws_func', 'InferenceFunction')
 
-customer_upload = st.file_uploader("Upload ML Model (.pth)", type=['pth'])
+# --- 1. UPLOAD CARD ---
+with st.container(border=True):
+    customer_upload = st.file_uploader("Upload ML Model Artifact (.pth)", type=['pth'])
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        deploy_clicked = st.button("⚙️ Profile & Deploy to AWS", type="primary", use_container_width=True)
 
-if st.button("⚙️ Profile & Deploy to AWS", type="primary"):
+if deploy_clicked:
     if customer_upload:
         original_name = customer_upload.name 
-        with st.spinner(f"Extracting Architecture for {original_name} and Uploading to Cloud..."):
+        
+        # Terminal-Style Status Dropdown
+        with st.status(f"Initializing SmartScale Pipeline for `{original_name}`...", expanded=True) as status:
+            
+            st.write("📂 Saving artifact locally...")
             temp_path = os.path.join(project_root, "temp_model.pth")
             with open(temp_path, "wb") as f: f.write(customer_upload.getbuffer())
             
             try:
+                st.write("🧠 AI Extracting PyTorch Architecture...")
                 layers, input_dim, hidden_dim, params, flops = extract_features_from_pth(temp_path)
                 
-                st.markdown("### 📊 Extracted Model Architecture")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Layers", layers)
-                c2.metric("Parameters", f"{params / 1_000_000:.2f} M")
-                c3.metric("Est. FLOPs", f"{flops / 1_000_000_000:.2f} G")
-                
+                st.write("☁️ ProfilerNN calculating hardware requirements...")
                 predicted_ram = brain.profile_model(layers, input_dim, hidden_dim, params, flops)
-                st.success(f"🧠 **AI Profiler Decision:** Sizing Lambda to **{predicted_ram} MB RAM**")
-
-                st.text("☁️ Updating Lambda Infrastructure...")
+                
+                st.write(f"🌐 Provisioning AWS Lambda with {predicted_ram} MB RAM...")
                 success_mem, result_mem = update_lambda_memory(ak, sk, reg, func, predicted_ram)
                 
-                st.text(f"📦 Uploading {original_name} to S3...")
+                st.write("📦 Pushing secure artifact to AWS S3...")
                 success_s3, s3_path = upload_model_to_s3(ak, sk, reg, temp_path, original_name)
                 
                 if success_mem and success_s3:
-                    st.success(f"✅ Deployment Complete! AWS Lambda allocated {result_mem} MB and model secured at `s3://smartscale-models/{s3_path}`.")
+                    status.update(label="✅ Deployment Complete & Infrastructure Provisioned!", state="complete", expanded=False)
+                    
+                    # Display the beautiful metrics AFTER success
+                    st.markdown("### Extracted Architecture Details")
+                    with st.container(border=True):
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Architecture Layers", layers)
+                        c2.metric("Total Parameters", f"{params / 1_000_000:.2f} M")
+                        c3.metric("Est. FLOPs", f"{flops / 1_000_000_000:.2f} G")
+                        c4.metric("AI Assigned RAM", f"{predicted_ram} MB", delta="AWS Optimal")
+                    
+                    st.success(f"🎉 Model securely deployed to `s3://smartscale-models/{s3_path}`")
                 else: 
-                    st.error(f"❌ Deployment Failed. S3 Status: {success_s3} | Lambda Status: {success_mem}")
+                    status.update(label="❌ Deployment Failed", state="error", expanded=True)
+                    st.error(f"S3 Status: {success_s3} | Lambda Status: {success_mem}")
+            
             except Exception as e: 
-                st.error(f"Error during deployment: {e}")
+                status.update(label="❌ Critical Error in Pipeline", state="error")
+                st.error(f"Error details: {e}")
             finally:
                 if os.path.exists(temp_path): os.remove(temp_path)
+    else:
+        st.error("⚠️ Please upload a .pth file before clicking deploy.")
 
-# --- DEPLOYED MODELS INVENTORY ---
-st.markdown("---")
-st.markdown("### 🗄️ Deployed Models Inventory (MLOps Control Plane)")
+# --- 2. INVENTORY CONTROL PLANE ---
+st.markdown("<br><hr><br>", unsafe_allow_html=True)
+st.markdown("### MLOps Control Plane")
 st.markdown("Manage your globally deployed AI models. Toggle Auto-Scaling to let the LSTM AI take over infrastructure management.")
-
 deployed_models = list_deployed_models(ak, sk, reg)
 
 if not deployed_models:
-    st.info("No models currently deployed in S3.")
+    st.info("☁️ No models currently deployed in S3. Upload a model above to begin.")
 else:
-    # Build a clean grid layout
-    header1, header2, header3, header4 = st.columns([3, 2, 2, 3])
-    header1.markdown("**Model Artifact (S3)**")
-    header2.markdown("**Cloud Status**")
-    header3.markdown("**AI Auto-Scaler**")
-    header4.markdown("**Demo Controls**")
+    header1, header2, header3, header4 = st.columns([3, 1.5, 2, 2.5])
+    header1.markdown("<h4 style='color: #b3e5fc; font-size: 17px; margin-bottom: 5px;'>Artifact Name (S3)</h4>", unsafe_allow_html=True)
+    header2.markdown("<h4 style='color: #b3e5fc; font-size: 17px; margin-bottom: 5px;'>Cloud Status</h4>", unsafe_allow_html=True)
+    header3.markdown("<h4 style='color: #b3e5fc; font-size: 17px; margin-bottom: 5px;'>Autonomic Scaler</h4>", unsafe_allow_html=True)
+    header4.markdown("<h4 style='color: #b3e5fc; font-size: 17px; margin-bottom: 5px;'>Infrastructure Test</h4>", unsafe_allow_html=True)
     
     for model_name in deployed_models:
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
-        
-        col1.code(model_name)
-        col2.markdown("🟢 Active")
-        
-        # Check if this model is the currently active one
-        is_active = st.session_state.get('active_auto_scale_model') == model_name
-        
-        # 🌟 THE FIX: Clear the Home Page memory when the toggle is clicked
-        if col3.toggle("Auto-Scale", value=is_active, key=f"tgl_{model_name}"):
-            if st.session_state.get('active_auto_scale_model') != model_name:
-                st.session_state['active_auto_scale_model'] = model_name
-                st.session_state['aws_func'] = func 
+        with st.container(border=True):
+            col1, col2, col3, col4 = st.columns([3, 1.5, 2, 2.5])
+            
+            with col1:
+                st.markdown(f"<div style='margin-top: 10px; color: #ffffff; font-weight: 600; font-size: 16px; letter-spacing: 0.5px;'>📄 {model_name}</div>", unsafe_allow_html=True)
                 
-                # WIPE THE OLD DASHBOARD LOGS CLEAN
-                st.session_state.live_logs = pd.DataFrame(columns=["time", "actual_load", "predicted_load", "replicas", "decision"])
-                st.session_state['last_scaled_replica'] = 1
-                
-                st.rerun() # Refresh the UI instantly
+            with col2:
+                st.markdown("<div style='margin-top: 10px; font-size: 16px;'><span style='color: #00e676;'>●</span> <b>Active</b></div>", unsafe_allow_html=True)
+            
+            with col3:
+                is_active = st.session_state.get('active_auto_scale_model') == model_name
+                if st.toggle("Enable AI", value=is_active, key=f"tgl_{model_name}"):
+                    if st.session_state.get('active_auto_scale_model') != model_name:
+                        st.session_state['active_auto_scale_model'] = model_name
+                        st.session_state['aws_func'] = func 
+                        
+                        st.session_state.live_logs = pd.DataFrame(columns=["time", "actual_load", "predicted_load", "replicas", "decision"])
+                        st.session_state['last_scaled_replica'] = 1
+                        st.rerun() 
+                elif is_active:
+                     st.session_state['active_auto_scale_model'] = None
 
-        elif is_active:
-             # If it was active but user turned it off
-             st.session_state['active_auto_scale_model'] = None
+            with col4:
+                if st.button("Inject Traffic Load", key=f"btn_{model_name}", use_container_width=True):
+                    st.toast(f"Injecting 60 seconds of live AWS traffic for {model_name}...", icon="🔥")
+                    thread = threading.Thread(target=inject_demo_traffic, args=(ak, sk, reg, func))
+                    thread.daemon = True
+                    thread.start()
 
-        # The Demo Traffic Button
-        if col4.button("🚀 Simulate Traffic Burst", key=f"btn_{model_name}"):
-            st.toast(f"Injecting 60 seconds of live AWS traffic for {model_name}...", icon="🔥")
-            thread = threading.Thread(target=inject_demo_traffic, args=(ak, sk, reg, func))
-            thread.daemon = True
-            thread.start()
+
+
+                    

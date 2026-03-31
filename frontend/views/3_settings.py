@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-st.title("⚙️ Cloud Environment Settings")
+st.title("Cloud Environment Settings")
 st.markdown("Configure your AWS credentials to allow SmartScale to manage your infrastructure.")
 
 with st.container(border=True):

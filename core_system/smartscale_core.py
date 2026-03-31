@@ -9,23 +9,10 @@ import pandas as pd
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 # --- 1. MODEL ARCHITECTURES ---
-# class ProfilerNN(nn.Module):
-#     def __init__(self):
-#         super(ProfilerNN, self).__init__()
-#         self.net = nn.Sequential(
-#             nn.Linear(4, 64),
-#             nn.ReLU(),
-#             nn.Dropout(0.2),
-#             nn.Linear(64, 32),
-#             nn.ReLU(),
-#             nn.Linear(32, 1)
-#         )
-#     def forward(self, x): return self.net(x)
-
 class ProfilerNN(nn.Module):
     def __init__(self):
         super(ProfilerNN, self).__init__()
-        # UPDATED: Matches your new 5-input, deep architecture
+        # Matches 5-input, deep architecture
         self.net = nn.Sequential(
             nn.Linear(5, 128),      
             nn.BatchNorm1d(128),    
@@ -39,18 +26,20 @@ class ProfilerNN(nn.Module):
         )
     def forward(self, x): return self.net(x)
 
-# LSTM now accepts input_size=3 (CPU, Hour, Min)
-class SimpleLSTM(nn.Module):
-    def __init__(self, input_dim=3):
-        super(SimpleLSTM, self).__init__()
+# UPDATED: The new 6-Feature Proactive LSTM
+class ProactiveLSTM(nn.Module):
+    def __init__(self, input_dim=6):
+        super(ProactiveLSTM, self).__init__()
         self.lstm = nn.LSTM(input_dim, 64, num_layers=1, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
-        self.fc = nn.Linear(64, 1)
+        self.fc1 = nn.Linear(64, 32)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(32, 1)
         
     def forward(self, x):
         out, _ = self.lstm(x)
-        out = self.dropout(out[:, -1, :]) 
-        return self.fc(out)
+        out = out[:, -1, :] 
+        out = self.relu(self.fc1(out))
+        return self.fc2(out)
 
 # --- 2. THE SYSTEM BRAIN ---
 class SmartScaleSystem:
@@ -72,9 +61,6 @@ class SmartScaleSystem:
             path_model = os.path.join(self.models_dir, '1_architecture_profiler_model.pth')
             path_sx = os.path.join(self.models_dir, '1_architecture_profiler_scaler_x.pkl')
             path_sy = os.path.join(self.models_dir, '1_architecture_profiler_scaler_y.pkl')
-            # path_model = os.path.join(self.models_dir, 'profiler_nn_model.pth')
-            # path_sx = os.path.join(self.models_dir, 'profiler_scaler_x.pkl')
-            # path_sy = os.path.join(self.models_dir, 'profiler_scaler_y.pkl')
 
             if os.path.exists(path_model):
                 self.profiler_model.load_state_dict(torch.load(path_model, map_location=DEVICE))
@@ -88,21 +74,22 @@ class SmartScaleSystem:
             print(f"    Failed to load Profiler: {e}")
 
     def load_optimizer(self):
-        """Loads the NEW LSTM model and BOTH scalers"""
+        """Loads the NEW 6-Feature Proactive LSTM model and BOTH scalers"""
         try:
-            path_model = os.path.join(self.models_dir, 'resource_optimizer.pth')
-            path_scaler = os.path.join(self.models_dir, 'traffic_scaler.pkl')
-            path_time_scaler = os.path.join(self.models_dir, 'time_scaler.pkl')
+            # UPDATED: Pointing to your new high-accuracy model files
+            path_model = os.path.join(self.models_dir, '2_resource_optimizer.pth')
+            path_scaler = os.path.join(self.models_dir, '2_traffic_scaler.pkl')
+            path_time_scaler = os.path.join(self.models_dir, '2_time_scaler.pkl')
 
             if os.path.exists(path_model):
-                # Initialize with input_dim=3
-                self.optimizer_model = SimpleLSTM(input_dim=3).to(DEVICE)
+                # Initialize with input_dim=6
+                self.optimizer_model = ProactiveLSTM(input_dim=6).to(DEVICE)
                 self.optimizer_model.load_state_dict(torch.load(path_model, map_location=DEVICE))
                 self.optimizer_model.eval()
                 
                 self.traffic_scaler = joblib.load(path_scaler)
                 self.time_scaler = joblib.load(path_time_scaler) 
-                print("   Module 2: Resource Optimizer (Time-Aware LSTM) - ACTIVE")
+                print("   Module 2: Resource Optimizer (Proactive LSTM) - ACTIVE")
             else:
                 print(f"    Warning: {path_model} not found.")
         except Exception as e:
@@ -149,21 +136,42 @@ class SmartScaleSystem:
         time_features = []
         traffic_features = []
         
-        for i, cpu_val in enumerate(resampled_history):
+        # THE CONVERSION FACTOR (TRANSLATION LAYER) 
+        # Google Borg uses "CPU Cores". AWS uses "Invocations".
+        # We assume 200 AWS Invocations equal roughly 1 Google CPU Core of load.
+        INVOCATION_TO_CPU_RATIO = 200.0
+        
+        for i, raw_invocations in enumerate(resampled_history):
             step_time = minute_index - ((11-i) * 5)
             hour = (step_time // 60) % 24
             min_of_hour = step_time % 60
+            
+            # Map huge AWS invocations down to small CPU Units for the LSTM
+            mapped_cpu = raw_invocations / INVOCATION_TO_CPU_RATIO
+            
+            cpu_avg = mapped_cpu
+            cpu_max = mapped_cpu * 1.5      
+            mem_avg = mapped_cpu * 0.8      
+            assigned_mem = 0.5           
+            
+            traffic_features.append([cpu_avg, cpu_max, mem_avg, assigned_mem])
             time_features.append([hour, min_of_hour])
-            traffic_features.append([cpu_val])
 
-        # Scaling & Prediction
-        traffic_scaled = self.traffic_scaler.transform(np.log1p(np.array(traffic_features)))
+        traffic_scaled = self.traffic_scaler.transform(np.array(traffic_features))
         time_scaled = self.time_scaler.transform(np.array(time_features))
         combined_data = np.hstack([traffic_scaled, time_scaled])
         
         input_tensor = torch.tensor(combined_data, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        
         with torch.no_grad():
             pred_scaled = self.optimizer_model(input_tensor).cpu().numpy()
             
-        pred_real = np.expm1(self.traffic_scaler.inverse_transform(pred_scaled)[0][0])
-        return max(0.0, float(pred_real))
+        dummy_pred = np.zeros((1, 4))
+        dummy_pred[0, 0] = pred_scaled[0, 0]
+        pred_cpu_units = self.traffic_scaler.inverse_transform(dummy_pred)[0, 0]
+        
+        #  CONVERT BACK TO INVOCATIONS 
+        # Multiply back so the Streamlit graph shows 1000+ instead of 5
+        predicted_invocations = pred_cpu_units * INVOCATION_TO_CPU_RATIO
+        
+        return max(0.0, float(predicted_invocations))

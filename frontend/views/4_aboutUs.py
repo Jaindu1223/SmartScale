@@ -43,7 +43,7 @@ with st.container(border=True):
     c1, c2 = st.columns([1, 3], gap="large")
     
     with c1:
-        dev_image_path = "/Users/jaindugajanayake/Desktop/4th Yr Docs/FYP/SmartScale/helper/jaindu.png" 
+        dev_image_path = "helper/jaindu.png" 
         
         if os.path.exists(dev_image_path):
             # Using use_container_width makes it perfectly fit the column

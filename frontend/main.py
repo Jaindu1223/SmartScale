@@ -150,7 +150,7 @@ def login_screen():
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        img_path = "/Users/jaindugajanayake/Desktop/4th Yr Docs/FYP/SmartScale/helper/logo.png"
+        img_path = "helper/logo.png"
         if os.path.exists(img_path):
             c1, c2, c3 = st.columns([1, 1, 1])
             with c2: st.image(img_path, use_container_width=True)
@@ -190,7 +190,7 @@ else:
             logo_img_col, logo_txt_col = st.columns([1, 3.7], gap="medium")
             
             with logo_img_col:
-                img_path = "/Users/jaindugajanayake/Desktop/4th Yr Docs/FYP/SmartScale/helper/streamlit1.png"
+                img_path = "helper/Streamlit1.png"
                 if os.path.exists(img_path):
                     st.image(img_path) 
             

@@ -5,10 +5,10 @@ import joblib
 import os
 import pandas as pd
 
-# --- CONFIGURATION ---
+# CONFIGURATION
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
-# --- 1. MODEL ARCHITECTURES ---
+# MODEL ARCHITECTURES
 class ProfilerNN(nn.Module):
     def __init__(self):
         super(ProfilerNN, self).__init__()
@@ -26,7 +26,7 @@ class ProfilerNN(nn.Module):
         )
     def forward(self, x): return self.net(x)
 
-# UPDATED: The new 6-Feature Proactive LSTM
+#  6 feature Proactive LSTM
 class ProactiveLSTM(nn.Module):
     def __init__(self, input_dim=6):
         super(ProactiveLSTM, self).__init__()

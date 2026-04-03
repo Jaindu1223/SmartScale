@@ -6,7 +6,7 @@ import threading
 import time
 import pandas as pd 
 
-# --- PATH SETUP ---
+# path setup
 current_file = os.path.abspath(__file__)
 views_dir = os.path.dirname(current_file)
 frontend_dir = os.path.dirname(views_dir)     
@@ -25,7 +25,7 @@ from core_system.model_extractor import extract_features_from_pth
 def load_ai_brain(): return SmartScaleSystem()
 brain = load_ai_brain()
 
-# --- AWS BOTO3 HELPERS ---
+# aws boto3 helpers
 def update_lambda_memory(access_key, secret_key, region, function_name, memory_mb):
     try:
         client = boto3.client('lambda', aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
@@ -65,7 +65,7 @@ def inject_demo_traffic(access_key, secret_key, region, function_name):
     except Exception as e:
         print(f"Traffic Injection Failed: {e}")
 
-# --- UI SETUP ---
+# ui setup
 st.markdown("<h1 style='text-align: left; font-weight: 800; letter-spacing: -0.5px;'>Deploy Customer Workload</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: left; color: #b3e5fc; margin-bottom: 30px; font-size: 1.1em;'>Upload your PyTorch model. SmartScale will automatically extract the layers, size the hardware, and push the artifact to AWS S3.</p>", unsafe_allow_html=True)
 
@@ -89,7 +89,7 @@ sk = st.session_state['aws_secret']
 reg = st.session_state['aws_region']
 func = st.session_state.get('aws_func', 'InferenceFunction')
 
-# --- 1. UPLOAD CARD ---
+# upload and deploy section
 with st.container(border=True):
     customer_upload = st.file_uploader("Upload ML Model Artifact (.pth)", type=['pth'])
     
@@ -146,7 +146,7 @@ if deploy_clicked:
     else:
         st.error("⚠️ Please upload a .pth file before clicking deploy.")
 
-# --- 2. INVENTORY CONTROL PLANE ---
+# inventory of deployed models and MLOps control plane
 st.markdown("<br><hr><br>", unsafe_allow_html=True)
 st.markdown("### MLOps Control Plane")
 st.markdown("Manage your globally deployed AI models. Toggle Auto-Scaling to let the LSTM AI take over infrastructure management.")

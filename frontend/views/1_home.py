@@ -8,7 +8,7 @@ import boto3
 import numpy as np
 from datetime import datetime, timezone
 
-# --- PATH SETUP ---
+# path setup
 current_file = os.path.abspath(__file__)
 views_dir = os.path.dirname(current_file)
 frontend_dir = os.path.dirname(views_dir)     
@@ -35,7 +35,7 @@ def scale_aws_resource(replicas, access_key, secret_key, region, function_name):
         return True
     except Exception as e: return False
 
-# --- UI SETUP ---
+# Ui setup
 st.markdown("<h1 style='text-align: left; font-weight: 800; letter-spacing: -0.5px;'>Live Production Dashboard</h1>", unsafe_allow_html=True)
 
 if 'aws_access' not in st.session_state or not st.session_state['aws_access']:
@@ -52,7 +52,7 @@ if 'aws_access' not in st.session_state or not st.session_state['aws_access']:
     st.markdown(warning_html, unsafe_allow_html=True)
     st.stop()
 
-# --- MLOPS STATE MANAGEMENT ---
+# MlOps state management
 func_name = st.session_state.get('aws_func', 'InferenceFunction')
 active_model = st.session_state.get('active_auto_scale_model', None)
 live_mode = (active_model is not None)
@@ -109,7 +109,7 @@ if len(ts) > 0:
             elif replicas < last_rep: decision = "SCALE DOWN 🔽"
             else: decision = "MAINTAIN ✅"
             
-            # --- THE COOLDOWN LOGIC ---
+            # cooldown logic
             current_time = time.time()
             cooldown_seconds = 180 # Wait 3 minutes before hitting the AWS API again
             
@@ -138,7 +138,7 @@ if len(ts) > 0:
                 "AI Decision": decision
             }])
             st.session_state.live_logs = pd.concat([st.session_state.live_logs, new_row], ignore_index=True)
-# --- RENDERING THE UI ---
+# rerendering the ui
 df = st.session_state.live_logs
 if df.empty:
     st.info("📡 Connecting to AWS CloudWatch... Waiting for the first 60-second metric aggregation bucket.")
@@ -198,6 +198,6 @@ else:
             }
         )
 
-#  Instead of a permanent loop, we wait 5 seconds and then safely restart the page!
+#  Instead of a permanent loop, wait 5 seconds and then safely restart the page!
 time.sleep(5)
 st.rerun()

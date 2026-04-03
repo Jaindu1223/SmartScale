@@ -15,7 +15,7 @@ def execute_deploy(file_path):
     # Extract the actual file name from the path for S3
     original_name = os.path.basename(full_path)
     
-    print(f"\n🚀 Initializing SmartScale CLI Deployment: {full_path}")
+    print(f"\nInitializing SmartScale CLI Deployment: {full_path}")
     
     if not os.path.exists(full_path):
         print(f" Error: File '{full_path}' not found.")
@@ -33,7 +33,7 @@ def execute_deploy(file_path):
         predicted_ram = brain.profile_model(layers, input_dim, hidden_dim, params, flops)
         print(f" AI Decision: Sizing to {predicted_ram} MB RAM")
         
-        print("☁️ Updating AWS Lambda Hardware...")
+        print(" Updating AWS Lambda Hardware...")
         # Assuming aws_utils abstracts the keys for the CLI
         success, result = update_lambda_memory(predicted_ram)
         

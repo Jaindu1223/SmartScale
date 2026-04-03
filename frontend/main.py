@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 
-# 1. Setup the page (MUST be the first Streamlit command)
+# 1. Setup the page
 st.set_page_config(page_title="SmartScale Platform", page_icon="☁️", layout="wide", initial_sidebar_state="collapsed")
 
 # Custome css injection: Gradient, glassmorphism, animations...etc

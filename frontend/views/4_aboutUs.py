@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 
-# --- UI SETUP ---
+# ui setup
 st.markdown("<h1 style='text-align: left;margin-bottom: -15px; font-weight: 800; letter-spacing: -0.5px;'>About SmartScale</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: left; color: #b3e5fc; margin-bottom: 35px; font-size: 1.1em;'>The Autonomic Cloud Manager for Next-Gen MLOps.</p>", unsafe_allow_html=True)
 

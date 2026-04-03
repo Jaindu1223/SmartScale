@@ -4,7 +4,7 @@ import numpy as np
 
 # Load your RAW google trace data
 RAW_DATA_FILE = "/Users/jaindugajanayake/Desktop/4th Yr Docs/FYP/SmartScale/data/originalDataSet/borg_traces_data.csv" # Update with your actual raw file name
-print(f"🔍 Loading Raw Google Trace Log: {RAW_DATA_FILE}")
+print(f"Loading Raw Google Trace Log: {RAW_DATA_FILE}")
 df = pd.read_csv(RAW_DATA_FILE)
 
 # Safely parse the stringified dictionaries for CPU and Memory
@@ -16,7 +16,7 @@ def parse_dict_string(dict_str):
     except:
         return {'cpus': 0.0, 'memory': 0.0}
 
-print("⚙️ Extracting Multi-Variate Hardware Features...")
+print("Extracting Multi-Variate Hardware Features...")
 
 # 1. Extract CPU and Memory from dictionaries
 df['avg_usage_dict'] = df['average_usage'].apply(parse_dict_string)
@@ -33,7 +33,7 @@ df['assigned_mem'] = df['assigned_memory'].fillna(0.0)
 df['minute'] = (df['start_time'] / 1e6 / 60).astype(int)
 
 # 4. Group by minute to get the total load across the cluster
-print("📊 Aggregating cluster traffic by minute...")
+print("Aggregating cluster traffic by minute...")
 cluster_traffic = df.groupby('minute').agg({
     'cpu_avg': 'sum',
     'cpu_max': 'max',  # Get the highest spike in that minute
@@ -42,7 +42,7 @@ cluster_traffic = df.groupby('minute').agg({
 }).reset_index()
 
 # 5. Apply the "Smoothing" fix we discussed earlier (Rolling Average)
-print("🌊 Smoothing data to remove chaotic micro-noise...")
+print("Smoothing data to remove chaotic micro-noise...")
 # We smooth the average metrics, but leave the max spike alone so the AI learns to catch it!
 cluster_traffic['cpu_avg'] = cluster_traffic['cpu_avg'].rolling(window=3, min_periods=1).mean()
 cluster_traffic['mem_avg'] = cluster_traffic['mem_avg'].rolling(window=3, min_periods=1).mean()
@@ -50,4 +50,4 @@ cluster_traffic['mem_avg'] = cluster_traffic['mem_avg'].rolling(window=3, min_pe
 # Save the rich dataset
 output_file = "/Users/jaindugajanayake/Desktop/4th Yr Docs/FYP/SmartScale/data/google_trace_log_2019.csv"
 cluster_traffic.to_csv(output_file, index=False)
-print(f"✅ Saved highly optimized dataset as: {output_file}")
+print(f"Saved highly optimized dataset as: {output_file}")
